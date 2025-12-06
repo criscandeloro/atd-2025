@@ -1,7 +1,6 @@
 import http from 'k6/http';
 import { check, group, sleep } from 'k6';
-import { randomString } from '../helpers/randomData.js';
-
+import { registerUser, loginUser } from '../helpers/auth.js';
 
 export const options = {
   vus: 10,
@@ -15,13 +14,13 @@ const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 
 export default function () {
   // Ensure registration is successful before proceeding
-  const user = registerUser();
+  const user = registerUser(BASE_URL);
   if (!user) {
     return; // Stop this iteration if registration failed
   }
 
   // Login with the registered user
-  const authToken = loginUser(user);
+  const authToken = loginUser(BASE_URL, user);
   if (!authToken) {
     return; // Stop this iteration if login failed
   }
@@ -36,72 +35,6 @@ export default function () {
   checkout(authToken, productId);
 
   sleep(1);
-}
-
-
-
-function registerUser() {
-  const uniqueId = `${__VU}-${__ITER}-${randomString()}`;
-  const user = {
-    email: `user_${uniqueId}@example.com`,
-    password: 'password123',
-    name: `Test User ${__VU}-${__ITER}`,
-  };
-
-  group('User Registration', function () {
-    const payload = JSON.stringify({
-      email: user.email,
-      password: user.password,
-      name: user.name,
-    });
-
-    const params = {
-      headers: { 'Content-Type': 'application/json' },
-    };
-
-    const res = http.post(`${BASE_URL}/auth/register`, payload, params);
-
-    const isSuccess = check(res, {
-      'registration status is 201': (r) => r.status === 201,
-    });
-
-    if (!isSuccess) {
-        console.error(`Registration failed for user ${user.email}: ${res.status} ${res.body}`);
-        return null;
-    }
-  });
-
-  return user;
-}
-
-function loginUser(user) {
-  let authToken = '';
-
-  group('User Login', function () {
-    const payload = JSON.stringify({
-      email: user.email,
-      password: user.password,
-    });
-
-    const params = {
-      headers: { 'Content-Type': 'application/json' },
-    };
-
-    const res = http.post(`${BASE_URL}/auth/login`, payload, params);
-
-    const isSuccess = check(res, {
-      'login status is 200': (r) => r.status === 200,
-    });
-
-    if (isSuccess) {
-      authToken = res.json('data.token');
-    } else {
-        console.error(`Login failed for user ${user.email}: ${res.status} ${res.body}`);
-        return null;
-    }
-  });
-
-  return authToken;
 }
 
 function createProduct(authToken) {
